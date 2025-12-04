@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, ArrowRight, Check, Calendar, CreditCard, FileText } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -7,6 +7,7 @@ import { Checkbox } from "../ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { toast } from "sonner@2.0.3";
+import { eventTracker } from "../../utils/eventTracking";
 import type { Vehicle, BookingFormData } from "../../types";
 import { bookingsApi } from "../../utils/api";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
@@ -50,6 +51,37 @@ export function BookingFlow({ vehicle, onNavigate, user }: BookingFlowProps) {
   });
   const [loading, setLoading] = useState(false);
   const [confirmationData, setConfirmationData] = useState<any>(null);
+
+  // Track booking started when component mounts
+  useEffect(() => {
+    const pricing = calculatePricing();
+    eventTracker.trackBookingStarted(vehicle, {
+      pickup_location: bookingData.pickup_location,
+      pickup_date: bookingData.pickup_date,
+      return_date: bookingData.return_date,
+      estimated_total: pricing.total,
+    }, user);
+  }, []);
+
+  // Track when user leaves the page without completing
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (step < 5 && !confirmationData) {
+        const pricing = calculatePricing();
+        const stepNames = ["dates", "extras", "customer-info", "payment", "review"];
+        eventTracker.trackBookingAbandoned(stepNames[step - 1], vehicle, {
+          pickup_location: bookingData.pickup_location,
+          pickup_date: bookingData.pickup_date,
+          return_date: bookingData.return_date,
+          total_price: pricing.total,
+          extras: Object.keys(bookingData.addons || {}).filter(k => bookingData.addons?.[k]),
+        }, user);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [step, confirmationData, bookingData, user]);
 
   const calculatePricing = () => {
     if (!bookingData.pickup_date || !bookingData.return_date) {
@@ -114,6 +146,13 @@ export function BookingFlow({ vehicle, onNavigate, user }: BookingFlowProps) {
     }
 
     setLoading(true);
+    
+    // Track payment attempt
+    eventTracker.trackPaymentAttempted(pricing.total, {
+      vehicle_name: `${vehicle.make} ${vehicle.model}`,
+      payment_method: bookingData.payment_method,
+    }, user);
+    
     try {
       const booking = {
         vehicle_id: vehicle.id,
@@ -139,6 +178,25 @@ export function BookingFlow({ vehicle, onNavigate, user }: BookingFlowProps) {
       const response = await bookingsApi.create(booking);
       
       if (response.success) {
+        // Track successful payment
+        eventTracker.trackPaymentSuccess(pricing.total, {
+          vehicle_name: `${vehicle.make} ${vehicle.model}`,
+          payment_method: bookingData.payment_method,
+        }, user);
+        
+        // Track completed booking
+        eventTracker.trackBookingCompleted({
+          id: response.data.booking.id,
+          confirmation_number: response.data.booking.booking_reference,
+          vehicle_id: vehicle.id,
+          vehicle_name: `${vehicle.make} ${vehicle.model}`,
+          pickup_location: bookingData.pickup_location,
+          pickup_date: bookingData.pickup_date,
+          return_date: bookingData.return_date,
+          total_amount: pricing.total,
+          extras: Object.keys(bookingData.addons || {}).filter(k => bookingData.addons?.[k]),
+        }, user);
+        
         setConfirmationData(response.data);
         setStep(5);
         toast.success("Booking confirmed!");
@@ -146,6 +204,12 @@ export function BookingFlow({ vehicle, onNavigate, user }: BookingFlowProps) {
         throw new Error(response.error);
       }
     } catch (error: any) {
+      // Track failed payment
+      eventTracker.trackPaymentFailed(pricing.total, error.message, {
+        vehicle_name: `${vehicle.make} ${vehicle.model}`,
+        payment_method: bookingData.payment_method,
+      }, user);
+      
       toast.error(error.message || "Failed to create booking");
     } finally {
       setLoading(false);

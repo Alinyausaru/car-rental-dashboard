@@ -4,8 +4,10 @@ import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { Skeleton } from "../ui/skeleton";
+import { eventTracker } from "../../utils/eventTracking";
 import type { Vehicle, Review } from "../../types";
 import { reviewsApi } from "../../utils/api";
+import { createClient } from "../../utils/supabase/client";
 
 interface VehicleDetailsProps {
   vehicle: Vehicle;
@@ -17,10 +19,26 @@ export function VehicleDetails({ vehicle, onNavigate, onBook }: VehicleDetailsPr
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     loadReviews();
+    checkUser();
+    // Track vehicle view
+    trackVehicleView();
   }, [vehicle.id]);
+
+  const checkUser = async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    setUser(session?.user || null);
+  };
+
+  const trackVehicleView = async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    eventTracker.trackVehicleView(vehicle, session?.user);
+  };
 
   const loadReviews = async () => {
     try {

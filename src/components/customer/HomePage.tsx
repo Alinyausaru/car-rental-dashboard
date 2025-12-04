@@ -5,14 +5,16 @@ import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Card, CardContent } from "../ui/card";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
+import { eventTracker } from "../../utils/eventTracking";
 import type { Vehicle } from "../../types";
 
 interface HomePageProps {
   onNavigate: (page: string, params?: any) => void;
   featuredVehicles: Vehicle[];
+  user?: any;
 }
 
-export function HomePage({ onNavigate, featuredVehicles }: HomePageProps) {
+export function HomePage({ onNavigate, featuredVehicles, user }: HomePageProps) {
   const [searchData, setSearchData] = useState({
     location: "",
     pickupDate: "",
@@ -20,6 +22,8 @@ export function HomePage({ onNavigate, featuredVehicles }: HomePageProps) {
   });
 
   const handleSearch = () => {
+    // Track search event
+    eventTracker.trackSearch(searchData, user);
     onNavigate("cars", { ...searchData });
   };
 

@@ -3,8 +3,6 @@ import { CarRentalDashboard } from "./components/CarRentalDashboard";
 import { CustomerWebsite } from "./components/CustomerWebsite";
 import { createClient } from "./utils/supabase/client";
 
-const DEV_BYPASS_ADMIN = true;
-
 export default function App() {
   const [mode, setMode] = useState<"customer" | "admin">("customer");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -14,15 +12,10 @@ export default function App() {
   }, []);
 
   const checkAdminStatus = async () => {
-    if (DEV_BYPASS_ADMIN) {
-      setIsAdmin(true);
-      return;
-    }
-
     try {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
-
+      
       if (session?.user?.user_metadata?.role === "admin") {
         setIsAdmin(true);
       }

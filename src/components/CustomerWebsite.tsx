@@ -35,7 +35,11 @@ type PageType =
   | "privacy"
   | "admin";
 
-export function CustomerWebsite() {
+interface CustomerWebsiteProps {
+  onSwitchToAdmin?: () => void;
+}
+
+export function CustomerWebsite({ onSwitchToAdmin }: CustomerWebsiteProps = {}) {
   const [currentPage, setCurrentPage] = useState<PageType>("home");
   const [pageParams, setPageParams] = useState<any>({});
   const [user, setUser] = useState<any>(null);
@@ -49,11 +53,19 @@ export function CustomerWebsite() {
 
   useEffect(() => {
     // Load selected vehicle when navigating to vehicle-details or booking
-    if ((currentPage === "vehicle-details" || currentPage === "booking") && pageParams.id) {
-      const vehicle = vehicles.find((v) => v.id === pageParams.id || v.id === pageParams.vehicleId);
+    if ((currentPage === "vehicle-details" || currentPage === "booking") && (pageParams.id || pageParams.vehicleId)) {
+      const vehicleId = pageParams.id || pageParams.vehicleId;
+      const vehicle = vehicles.find((v) => v.id === vehicleId);
       setSelectedVehicle(vehicle || null);
     }
   }, [currentPage, pageParams, vehicles]);
+
+  useEffect(() => {
+    // Trigger admin switch when navigating to admin page
+    if (currentPage === "admin" && onSwitchToAdmin) {
+      onSwitchToAdmin();
+    }
+  }, [currentPage, onSwitchToAdmin]);
 
   const initializeApp = async () => {
     await checkUser();
@@ -113,7 +125,7 @@ export function CustomerWebsite() {
   const renderPage = () => {
     switch (currentPage) {
       case "home":
-        return <HomePage onNavigate={handleNavigate} featuredVehicles={vehicles} />;
+        return <HomePage onNavigate={handleNavigate} featuredVehicles={vehicles} user={user} />;
 
       case "cars":
         return <BrowseCars vehicles={vehicles} onNavigate={handleNavigate} />;
@@ -194,7 +206,7 @@ export function CustomerWebsite() {
         return <PrivacyPage onNavigate={handleNavigate} />;
 
       case "admin":
-        // Redirect to admin CRM (will be handled by parent component)
+        // Redirect to admin CRM (handled by useEffect)
         return (
           <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
             <h1 className="text-4xl mb-4">Admin Access</h1>
